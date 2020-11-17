@@ -1,5 +1,4 @@
 /* eslint-disable no-console */
-
 import themes from './themes';
 import { generateTeam } from './generators';
 import Bowman from './Characters/Bowerman';
@@ -24,10 +23,10 @@ export default class GameController {
     this.playerTeam = new Team();
     this.computerTeam = new Team();
     this.addEventListeners();
-    this.setBlockingBoard(false);
   }
 
   init(isReload = true) {
+    this.setBlockingBoard(true);
     this.availablePoints = [[], []];
     let loadStateResult = false;
     if (isReload) {
@@ -114,17 +113,14 @@ export default class GameController {
       }
       return false;
     });
-    if (!characterInCell) {
-      if (this.gameState.selectedCharacter !== null) {
-        if (this.availablePoints[0].includes(index)) {
-          // перемещаем персонаж игрока
-          this.setBlockingBoard(true);
-          this.moveAction(this.gameState.selectedCharacter, index);
-          // console.log(`переход хода от ${this.gameState.activePlayer}`);
-          this.gameState.switchActivePlayer();
-          this.computerAction();
-        }
-      }
+    if (!characterInCell && this.gameState.selectedCharacter !== null
+      && this.availablePoints[0].includes(index)) {
+      // перемещаем персонаж игрока
+      this.setBlockingBoard(true);
+      this.moveAction(this.gameState.selectedCharacter, index);
+      // console.log(`переход хода от ${this.gameState.activePlayer}`);
+      this.gameState.switchActivePlayer();
+      this.computerAction();
     }
   }
 
@@ -148,15 +144,12 @@ export default class GameController {
       }
       return false;
     });
-    if (!characterInCell) {
-      if (this.gameState.selectedCharacter !== null
-        && this.gameState.selectedCharacter.position !== index
+    if (!characterInCell && this.gameState.selectedCharacter !== null) {
+      if (this.gameState.selectedCharacter.position !== index
         && this.availablePoints[0].includes(index)) {
         this.gamePlay.selectCell(index, 'green');
         this.gamePlay.setCursor(cursors.pointer);
-      } else if (this.gameState.selectedCharacter !== null) {
-        this.gamePlay.setCursor(cursors.notallowed);
-      } else this.gamePlay.setCursor(cursors.auto);
+      } else this.gamePlay.setCursor(cursors.notallowed);
     }
   }
 
@@ -252,10 +245,21 @@ export default class GameController {
           }
         });
       } else {
-        const position = availablePoints[0][getRandomInteger(0,
-          this.gameState.computerTeamPositioned.length - 1)];
-        // console.log(`move to position = ${position}`);
-        this.moveAction(ally, position);
+        // ищем случайно свободное поле для перемещения (не занятое ни одним персонажем)
+        // и перемещаемся туда
+        const condition = true;
+        let iteration = 0;
+        while (condition && iteration < 50) {
+          const position = availablePoints[0][Math.floor(Math.random()
+            * availablePoints[0].length)];
+          if (![...this.gameState.playerTeamPositioned, ...this.gameState.computerTeamPositioned]
+            .some((value) => value.position === position)) {
+            this.moveAction(ally, position);
+            break;
+          }
+          iteration += 1;
+        }
+        if (iteration >= 50) console.log('Компьютер в патовой ситуации передает ход');
         // console.log(`переход хода от ${this.gameState.activePlayer}`);
         this.gameState.switchActivePlayer();
         this.setBlockingBoard(false);
@@ -312,20 +316,33 @@ export default class GameController {
   }
 
   generatePositionedArrayByTeam(teamType) {
-    function getRandomPosition(rangeX, rangeY) {
-      return coordsToPosition(getRandomInteger(...rangeX), getRandomInteger(...rangeY));
+    const set = new Set([...this.gameState.playerTeamPositioned.map((value) => value.position),
+      ...this.gameState.computerTeamPositioned.map((value) => value.position)]);
+
+    function getRandomUniquePosition(rangeX, rangeY) {
+      let position;
+      const condition = true;
+      while (condition) {
+        position = coordsToPosition(getRandomInteger(...rangeX), getRandomInteger(...rangeY));
+        if (!set.has(position)) {
+          set.add(position);
+          break;
+        }
+      }
+      return position;
+      // return coordsToPosition(getRandomInteger(...rangeX), getRandomInteger(...rangeY));
     }
 
     switch (teamType) {
       case 0: {
         const extendData = this.playerTeam.toArray()
-          .map((value) => new PositionedCharacter(value, getRandomPosition([0, 1], [0, 7])));
+          .map((value) => new PositionedCharacter(value, getRandomUniquePosition([0, 1], [0, 7])));
         this.gameState.playerTeamPositioned.push(...extendData);
         break;
       }
       case 1: {
         const extendData = this.computerTeam.toArray()
-          .map((value) => new PositionedCharacter(value, getRandomPosition([6, 7], [0, 7])));
+          .map((value) => new PositionedCharacter(value, getRandomUniquePosition([6, 7], [0, 7])));
         this.gameState.computerTeamPositioned.push(...extendData);
         break;
       }
@@ -382,12 +399,17 @@ export default class GameController {
       const data = this.stateService.load(isLoadUser);
       if (data) {
         this.gameState.from(data);
-        this.getBoardByLevel(this.gameState.level);
-        this.gamePlay.redrawPositions([
-          ...this.gameState.playerTeamPositioned, ...this.gameState.computerTeamPositioned]);
-        if (this.gameState.activePlayer === 1) {
-          this.setBlockingBoard(true);
-          this.computerAction();
+        if (this.gameState.level === 4 && this.gameState.computerTeamPositioned.length === 0) {
+          GamePlay.showMessage('Начните новую игру');
+          this.getBoardByLevel(1);
+        } else {
+          this.getBoardByLevel(this.gameState.level);
+          this.gamePlay.redrawPositions([
+            ...this.gameState.playerTeamPositioned, ...this.gameState.computerTeamPositioned]);
+          if (this.gameState.activePlayer === 1) {
+            this.setBlockingBoard(true);
+            this.computerAction();
+          }
         }
       } else if (isLoadUser) GamePlay.showError('Не удалось загрузить игру');
       else throw new Error('Не удалось восстановить игру');
