@@ -47,6 +47,7 @@ export default class GameController {
         ...this.gameState.playerTeamPositioned,
         ...this.gameState.computerTeamPositioned,
       ]);
+      this.viewStateInformation();
     }
     this.setBlockingBoard(false);
   }
@@ -101,9 +102,11 @@ export default class GameController {
                     ...this.gameState.computerTeamPositioned]);
                   this.setBlockingBoard(false);
                 }
+                this.viewStateInformation();
               } else {
                 // console.log(`переход хода от ${this.gameState.activePlayer}`);
                 this.gameState.switchActivePlayer();
+                this.viewStateInformation();
                 this.computerAction();
               }
             });
@@ -120,6 +123,7 @@ export default class GameController {
       this.moveAction(this.gameState.selectedCharacter, index);
       // console.log(`переход хода от ${this.gameState.activePlayer}`);
       this.gameState.switchActivePlayer();
+      this.viewStateInformation();
       this.computerAction();
     }
   }
@@ -238,9 +242,11 @@ export default class GameController {
           if (result) {
             // оставляем поле заблокируемым
             GamePlay.showMessage('Игра завершена поражением игрока!!!');
+            this.viewStateInformation();
           } else {
             // console.log(`переход хода от ${this.gameState.activePlayer}`);
             this.gameState.switchActivePlayer();
+            this.viewStateInformation();
             this.setBlockingBoard(false);
           }
         });
@@ -262,6 +268,7 @@ export default class GameController {
         if (iteration >= 50) console.log('Компьютер в патовой ситуации передает ход');
         // console.log(`переход хода от ${this.gameState.activePlayer}`);
         this.gameState.switchActivePlayer();
+        this.viewStateInformation();
         this.setBlockingBoard(false);
       }
     };
@@ -316,7 +323,8 @@ export default class GameController {
   }
 
   generatePositionedArrayByTeam(teamType) {
-    const set = new Set([...this.gameState.playerTeamPositioned.map((value) => value.position),
+    const set = new Set([
+      ...this.gameState.playerTeamPositioned.map((value) => value.position),
       ...this.gameState.computerTeamPositioned.map((value) => value.position)]);
 
     function getRandomUniquePosition(rangeX, rangeY) {
@@ -411,11 +419,18 @@ export default class GameController {
             this.computerAction();
           }
         }
+        this.viewStateInformation();
       } else if (isLoadUser) GamePlay.showError('Не удалось загрузить игру');
       else throw new Error('Не удалось восстановить игру');
     } catch (error) {
       console.error(error.message);
       throw error;
     }
+  }
+
+  viewStateInformation() {
+    this.gamePlay.setLevelInfo(this.gameState.level);
+    this.gamePlay.setUserPointsInfo(this.gameState.points);
+    this.gamePlay.setPlayerInfo(this.gameState.activePlayer === 0 ? 'Игрок' : 'Компьютер');
   }
 }
