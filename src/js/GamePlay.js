@@ -13,6 +13,9 @@ export default class GamePlay {
     this.newGameListeners = [];
     this.saveGameListeners = [];
     this.loadGameListeners = [];
+    this.levelElement = null;
+    this.pointsElement = null;
+    this.playerElement = null;
   }
 
   bindToDOM(container) {
@@ -39,6 +42,11 @@ export default class GamePlay {
       <div class="board-container">
         <div data-id="board" class="board"></div>
       </div>
+      <div class="information">
+        <div data-id="info-level" class="info-level"></div>
+        <div data-id="info-points" class="info-points"></div>
+        <div data-id="info-player" class="info-player"></div>
+      </div>
     `;
 
     this.newGameEl = this.container.querySelector('[data-id=action-restart]');
@@ -62,6 +70,10 @@ export default class GamePlay {
     }
 
     this.cells = Array.from(this.boardEl.children);
+
+    this.levelElement = this.container.querySelector('[data-id=info-level]');
+    this.pointsElement = this.container.querySelector('[data-id=info-points]');
+    this.playerElement = this.container.querySelector('[data-id=info-player]');
   }
 
   /**
@@ -240,5 +252,17 @@ export default class GamePlay {
     if (this.container === null) {
       throw new Error('GamePlay not bind to DOM');
     }
+  }
+
+  setLevelInfo(level) {
+    this.levelElement.textContent = `Level: ${level}`;
+  }
+
+  setUserPointsInfo(points) {
+    this.pointsElement.textContent = `User points: ${points}`;
+  }
+
+  setPlayerInfo(player) {
+    this.playerElement.textContent = `Player: ${player}`;
   }
 }
