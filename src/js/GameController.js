@@ -242,7 +242,7 @@ export default class GameController {
           if (result) {
             // оставляем поле заблокируемым
             GamePlay.showMessage('Игра завершена поражением игрока!!!');
-            this.viewStateInformation();
+            this.gameState.switchActivePlayer();
           } else {
             // console.log(`переход хода от ${this.gameState.activePlayer}`);
             this.gameState.switchActivePlayer();
