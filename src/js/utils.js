@@ -93,7 +93,7 @@ export function getAvailableMovePositions(selectedCoords, parameter) {
     selectedCoords[0] - i >= 0 && selectedCoords[1] + i <= 7 && j < parameter;
     i += 1, j += 1) coords.push([selectedCoords[0] - i, selectedCoords[1] + i]);
 
-  return ([...coords.map((value) => coordsToPosition(value[0], value[1])), ...hvPositions])
+  return (coords.map((value) => coordsToPosition(value[0], value[1])).concat(hvPositions))
     .sort((a, b) => a - b);
 }
 
@@ -121,7 +121,7 @@ export function getAvailableAttackPositions(selectedCoords, parameter) {
     repeatedY(i, selectedCoords[1], parameter);
   }
 
-  return ([...coords.map((value) => coordsToPosition(value[0], value[1])), ...hvPositions])
+  return (coords.map((value) => coordsToPosition(value[0], value[1])).concat(hvPositions))
     .sort((a, b) => a - b);
 }
 

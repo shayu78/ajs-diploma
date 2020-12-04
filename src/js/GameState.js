@@ -1,4 +1,7 @@
-import { playerCharactersTypes, computerCharactersTypes } from './data';
+import {
+  playerCharactersTypes, computerCharactersTypes,
+  playerId, computerId, firstLevel,
+} from './data';
 import PositionedCharacter from './PositionedCharacter';
 import Bowman from './Characters/Bowerman';
 import Swordsman from './Characters/Swordsman';
@@ -9,16 +12,16 @@ import Vampire from './Characters/Vampire';
 
 export default class GameState {
   constructor() {
-    this.activePlayer = 0; // 0 - игрок, 1 - компьютер
+    this.activePlayer = playerId;
     this.selectedCharacter = null;
     this.playerTeamPositioned = [];
     this.computerTeamPositioned = [];
     this.points = 0;
-    this.level = 1;
+    this.level = firstLevel;
   }
 
   switchActivePlayer() {
-    this.activePlayer = (this.activePlayer === 0) ? 1 : 0;
+    this.activePlayer = (this.activePlayer === playerId) ? computerId : playerId;
   }
 
   from(object) {
@@ -68,5 +71,9 @@ export default class GameState {
     });
 
     return null;
+  }
+
+  getTeamsPositioned() {
+    return this.playerTeamPositioned.concat(this.computerTeamPositioned);
   }
 }

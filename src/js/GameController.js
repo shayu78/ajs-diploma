@@ -11,7 +11,12 @@ import Team from './Team';
 import { coordsToPosition, getRandomInteger, getAvailablePositions } from './utils';
 import PositionedCharacter from './PositionedCharacter';
 import GameState from './GameState';
-import { playerCharactersTypes, computerCharactersTypes } from './data';
+import {
+  playerCharactersTypes, computerCharactersTypes,
+  playerTeamId, computerTeamId,
+  playerId, computerId,
+  firstLevel, secondLevel, thirdLevel, forthLevel,
+} from './data';
 import GamePlay from './GamePlay';
 import cursors from './cursors';
 
@@ -23,6 +28,27 @@ export default class GameController {
     this.playerTeam = new Team();
     this.computerTeam = new Team();
     this.addEventListeners();
+    this.personAction = undefined;
+  }
+
+  get isPlayerPerson() {
+    return playerCharactersTypes.includes(this.personAction.character.type);
+  }
+
+  get isComputerPerson() {
+    return computerCharactersTypes.includes(this.personAction.character.type);
+  }
+
+  isAttackPoint(index) {
+    return this.availablePoints[1].includes(index);
+  }
+
+  isMovePoint(index) {
+    return this.availablePoints[0].includes(index);
+  }
+
+  get isCharacterSelected() {
+    return this.gameState.selectedCharacter !== null;
   }
 
   init(isReload = true) {
@@ -40,13 +66,10 @@ export default class GameController {
     if (!loadStateResult) {
       this.gameState.playerTeamPositioned = [];
       this.gameState.computerTeamPositioned = [];
-      this.gameState.level = 1;
-      this.activePlayer = 0;
+      this.gameState.level = firstLevel;
+      this.activePlayer = playerId;
       this.generateEnvironmentByLevel(this.gameState.level);
-      this.gamePlay.redrawPositions([
-        ...this.gameState.playerTeamPositioned,
-        ...this.gameState.computerTeamPositioned,
-      ]);
+      this.gamePlay.redrawPositions(this.gameState.getTeamsPositioned());
       this.viewStateInformation();
     }
     this.setBlockingBoard(false);
@@ -64,64 +87,50 @@ export default class GameController {
 
   onCellClick(index) {
     this.gamePlay.deselectCell(index);
-    const characterInCell = [
-      ...this.gameState.playerTeamPositioned,
-      ...this.gameState.computerTeamPositioned,
-    ].some((value) => {
-      if (value.position === index) {
-        if (playerCharactersTypes.includes(value.character.type)) {
-          if (this.gameState.selectedCharacter !== null) {
-            // меняем своего персонажа
-            this.gamePlay.deselectCell(this.gameState.selectedCharacter.position);
-          }
-          this.gamePlay.selectCell(index);
-          this.gameState.selectedCharacter = value;
-          this.availablePoints = getAvailablePositions(this.gameState.selectedCharacter.character,
-            this.gameState.selectedCharacter.position);
-        } else if (this.gameState.selectedCharacter !== null) {
-          if (this.availablePoints[1].includes(index)) {
-            // атакуем персонаж противника
-            this.setBlockingBoard(true);
-            this.attackAction(this.gameState.selectedCharacter, value).then((result) => {
-              if (result) {
-                // уровень пройден
-                this.gameState.playerTeamPositioned.forEach((player) => {
-                  this.gameState.points += player.character.health;
-                  player.character.levelUp();
-                });
-                // console.log(`total player points = ${this.gameState.points}`);
-                if (this.gameState.level === 4) {
-                  // оставляем поле заблокируемым
-                  GamePlay.showMessage('Игра завершена победой игрока!!!');
-                } else {
-                  this.gameState.level += 1;
-                  // формируем команды игроков
-                  this.generateEnvironmentByLevel(this.gameState.level);
-                  this.gamePlay.redrawPositions([
-                    ...this.gameState.playerTeamPositioned,
-                    ...this.gameState.computerTeamPositioned]);
-                  this.setBlockingBoard(false);
-                }
-                this.viewStateInformation();
+    this.personAction = this.gameState.getTeamsPositioned()
+      .find((value) => value.position === index);
+    if (this.personAction) {
+      if (this.isPlayerPerson) {
+        if (this.isCharacterSelected) {
+          // меняем своего персонажа
+          this.gamePlay.deselectCell(this.gameState.selectedCharacter.position);
+        }
+        this.gamePlay.selectCell(index);
+        this.gameState.selectedCharacter = this.personAction;
+        this.availablePoints = getAvailablePositions(this.gameState.selectedCharacter.character,
+          this.gameState.selectedCharacter.position);
+      } else if (this.isCharacterSelected) {
+        if (this.isAttackPoint(index)) {
+          this.setBlockingBoard(true);
+          this.attackAction(this.gameState.selectedCharacter, this.personAction).then((result) => {
+            if (result) {
+              // уровень пройден
+              this.gameState.playerTeamPositioned.forEach((player) => {
+                this.gameState.points += player.character.health;
+                player.character.levelUp();
+              });
+              if (this.gameState.level === forthLevel) {
+                // оставляем поле заблокируемым
+                GamePlay.showMessage('Игра завершена победой игрока!!!');
               } else {
-                // console.log(`переход хода от ${this.gameState.activePlayer}`);
-                this.gameState.switchActivePlayer();
-                this.viewStateInformation();
-                this.computerAction();
+                this.gameState.level += 1;
+                // формируем команды игроков
+                this.generateEnvironmentByLevel(this.gameState.level);
+                this.gamePlay.redrawPositions(this.gameState.getTeamsPositioned());
+                this.setBlockingBoard(false);
               }
-            });
-          } else GamePlay.showMessage('Противник недостижим для атаки');
-        } else GamePlay.showError('Это не ваш персонаж');
-        return true;
-      }
-      return false;
-    });
-    if (!characterInCell && this.gameState.selectedCharacter !== null
-      && this.availablePoints[0].includes(index)) {
-      // перемещаем персонаж игрока
+              this.viewStateInformation();
+            } else {
+              this.gameState.switchActivePlayer();
+              this.viewStateInformation();
+              this.computerAction();
+            }
+          });
+        } else GamePlay.showMessage('Противник недостижим для атаки');
+      } else GamePlay.showError('Это не ваш персонаж');
+    } else if (this.isCharacterSelected && this.isMovePoint(index)) {
       this.setBlockingBoard(true);
       this.moveAction(this.gameState.selectedCharacter, index);
-      // console.log(`переход хода от ${this.gameState.activePlayer}`);
       this.gameState.switchActivePlayer();
       this.viewStateInformation();
       this.computerAction();
@@ -129,28 +138,19 @@ export default class GameController {
   }
 
   onCellEnter(index) {
-    const characterInCell = [
-      ...this.gameState.playerTeamPositioned,
-      ...this.gameState.computerTeamPositioned,
-    ].some((value) => {
-      if (value.position === index) {
-        const tooltip = `\uD83C\uDF96${value.character.level} \u2694${value.character.attack} \uD83D\uDEE1${value.character.defence} \u2764${value.character.health}`;
-        this.gamePlay.showCellTooltip(tooltip, index);
-        if (playerCharactersTypes.includes(value.character.type)) {
-          this.gamePlay.setCursor(cursors.pointer);
-        } else if (this.gameState.selectedCharacter !== null
-          && computerCharactersTypes.includes(value.character.type)
-          && this.availablePoints[1].includes(index)) {
-          this.gamePlay.setCursor(cursors.crosshair);
-          this.gamePlay.selectCell(index, 'red');
-        } else this.gamePlay.setCursor(cursors.notallowed);
-        return true;
-      }
-      return false;
-    });
-    if (!characterInCell && this.gameState.selectedCharacter !== null) {
-      if (this.gameState.selectedCharacter.position !== index
-        && this.availablePoints[0].includes(index)) {
+    this.personAction = this.gameState.getTeamsPositioned()
+      .find((value) => value.position === index);
+    if (this.personAction) {
+      const tooltip = `\uD83C\uDF96${this.personAction.character.level} \u2694${this.personAction.character.attack} \uD83D\uDEE1${this.personAction.character.defence} \u2764${this.personAction.character.health}`;
+      this.gamePlay.showCellTooltip(tooltip, index);
+      if (this.isPlayerPerson) {
+        this.gamePlay.setCursor(cursors.pointer);
+      } else if (this.isCharacterSelected && this.isComputerPerson && this.isAttackPoint(index)) {
+        this.gamePlay.setCursor(cursors.crosshair);
+        this.gamePlay.selectCell(index, 'red');
+      } else this.gamePlay.setCursor(cursors.notallowed);
+    } else if (this.isCharacterSelected) {
+      if (this.gameState.selectedCharacter.position !== index && this.isMovePoint(index)) {
         this.gamePlay.selectCell(index, 'green');
         this.gamePlay.setCursor(cursors.pointer);
       } else this.gamePlay.setCursor(cursors.notallowed);
@@ -159,24 +159,18 @@ export default class GameController {
 
   onCellLeave(index) {
     this.gamePlay.setCursor(cursors.auto);
-    if (this.gameState.selectedCharacter !== null
+    if (this.isCharacterSelected
       && this.gameState.selectedCharacter.position !== index) this.gamePlay.deselectCell(index);
-    [...this.gameState.playerTeamPositioned, ...this.gameState.computerTeamPositioned]
-      .some((value) => {
-        if (value.position === index) {
-          this.gamePlay.hideCellTooltip(index);
-          return true;
-        }
-        return false;
-      });
+    if (this.gameState.getTeamsPositioned()
+      .some((value) => value.position === index)) this.gamePlay.hideCellTooltip(index);
   }
 
   async attackAction(ally, enemy) {
     const damage = Math.floor(Math.max(ally.character.attack - enemy.character.defence,
       ally.character.attack * 0.1));
     await this.gamePlay.showDamage(enemy.position, damage);
-    if (computerCharactersTypes.includes(enemy.character.type)) {
-      // console.log(`Нанесли урон персонажу компьютера - ${enemy.character.type}`);
+    if (this.isComputerPerson) {
+      // нанесли урон персонажу компьютера
       const positionedCharacter = this.gameState.computerTeamPositioned
         .find((value) => value === enemy);
       if (positionedCharacter) {
@@ -187,7 +181,7 @@ export default class GameController {
         }
       }
     } else {
-      // console.log(`Нанесли урон персонажу игрока - ${enemy.character.type}`);
+      // нанесли урон персонажу игрока
       const positionedCharacter = this.gameState.playerTeamPositioned
         .find((value) => value === enemy);
       if (positionedCharacter) {
@@ -198,8 +192,7 @@ export default class GameController {
         }
       }
     }
-    this.gamePlay.redrawPositions([
-      ...this.gameState.playerTeamPositioned, ...this.gameState.computerTeamPositioned]);
+    this.gamePlay.redrawPositions(this.gameState.getTeamsPositioned());
     this.clearSelection(ally);
     if (this.gameState.playerTeamPositioned.length === 0
       || this.gameState.computerTeamPositioned.length === 0) return true;
@@ -208,12 +201,12 @@ export default class GameController {
 
   moveAction(character, position) {
     if (computerCharactersTypes.includes(character.character.type)) {
-      // console.log('перемещаем персонаж компьютера');
+      // перемещаем персонаж компьютера
       const positionedCharacter = this.gameState.computerTeamPositioned
         .find((value) => value.position === character.position);
       if (positionedCharacter) positionedCharacter.position = position;
     } else {
-      // console.log('перемещаем персонаж игрока');
+      // перемещаем персонаж игрока
       const positionedCharacter = this.gameState.playerTeamPositioned
         .find((value) => value.position === character.position);
       if (positionedCharacter) {
@@ -221,30 +214,28 @@ export default class GameController {
         positionedCharacter.position = position;
       }
     }
-    this.gamePlay.redrawPositions([
-      ...this.gameState.playerTeamPositioned, ...this.gameState.computerTeamPositioned]);
+    this.gamePlay.redrawPositions(this.gameState.getTeamsPositioned());
   }
 
   computerAction() {
     const action = () => {
       const ally = this.gameState.computerTeamPositioned[getRandomInteger(0,
         this.gameState.computerTeamPositioned.length - 1)];
-      const availablePoints = getAvailablePositions(ally.character, ally.position);
-      availablePoints[1].forEach((value, key) => {
+      this.availablePoints = getAvailablePositions(ally.character, ally.position);
+      this.availablePoints[1].forEach((value, key) => {
         const randomIndex = Math.ceil(Math.random() * (key + 1));
-        availablePoints[1][key] = availablePoints[1][randomIndex];
-        availablePoints[1][randomIndex] = value;
+        this.availablePoints[1][key] = this.availablePoints[1][randomIndex];
+        this.availablePoints[1][randomIndex] = value;
       });
-      const enemy = this.gameState.playerTeamPositioned
-        .find((value) => availablePoints[1].includes(value.position));
-      if (enemy) {
-        this.attackAction(ally, enemy).then((result) => {
+      this.personAction = this.gameState.playerTeamPositioned
+        .find((value) => this.isAttackPoint(value.position));
+      if (this.personAction) {
+        this.attackAction(ally, this.personAction).then((result) => {
           if (result) {
             // оставляем поле заблокируемым
             GamePlay.showMessage('Игра завершена поражением игрока!!!');
             this.gameState.switchActivePlayer();
           } else {
-            // console.log(`переход хода от ${this.gameState.activePlayer}`);
             this.gameState.switchActivePlayer();
             this.viewStateInformation();
             this.setBlockingBoard(false);
@@ -256,17 +247,15 @@ export default class GameController {
         const condition = true;
         let iteration = 0;
         while (condition && iteration < 50) {
-          const position = availablePoints[0][Math.floor(Math.random()
-            * availablePoints[0].length)];
-          if (![...this.gameState.playerTeamPositioned, ...this.gameState.computerTeamPositioned]
-            .some((value) => value.position === position)) {
+          const position = this.availablePoints[0][Math.floor(Math.random()
+            * this.availablePoints[0].length)];
+          if (!this.gameState.getTeamsPositioned().some((value) => value.position === position)) {
             this.moveAction(ally, position);
             break;
           }
           iteration += 1;
         }
         if (iteration >= 50) console.log('Компьютер в патовой ситуации передает ход');
-        // console.log(`переход хода от ${this.gameState.activePlayer}`);
         this.gameState.switchActivePlayer();
         this.viewStateInformation();
         this.setBlockingBoard(false);
@@ -283,39 +272,42 @@ export default class GameController {
 
   generateEnvironmentByLevel(level) {
     switch (level) {
-      case 1: {
+      case firstLevel: {
         this.gamePlay.drawUi(themes.prairie);
-        this.playerTeam = generateTeam([Bowman, Swordsman], 1, 2);
-        this.generatePositionedArrayByTeam(0);
-        this.computerTeam = generateTeam([Daemon, Undead, Vampire], 1, 2);
-        this.generatePositionedArrayByTeam(1);
+        this.playerTeam = generateTeam([Bowman, Swordsman], firstLevel, 2);
+        this.generatePositionedArrayByTeam(playerTeamId);
+        this.computerTeam = generateTeam([Daemon, Undead, Vampire], firstLevel, 2);
+        this.generatePositionedArrayByTeam(computerTeamId);
         break;
       }
-      case 2: {
+      case secondLevel: {
         this.gamePlay.drawUi(themes.desert);
-        this.playerTeam = generateTeam([Bowman, Swordsman, Magician], 1, 1);
-        this.generatePositionedArrayByTeam(0);
+        this.playerTeam = generateTeam([Bowman, Swordsman, Magician], firstLevel, 1);
+        this.generatePositionedArrayByTeam(playerTeamId);
         const countPlayerCharacters = this.gameState.playerTeamPositioned.length;
-        this.computerTeam = generateTeam([Daemon, Undead, Vampire], 2, countPlayerCharacters);
-        this.generatePositionedArrayByTeam(1);
+        this.computerTeam = generateTeam([Daemon, Undead, Vampire],
+          secondLevel, countPlayerCharacters);
+        this.generatePositionedArrayByTeam(computerTeamId);
         break;
       }
-      case 3: {
+      case thirdLevel: {
         this.gamePlay.drawUi(themes.arctic);
-        this.playerTeam = generateTeam([Bowman, Swordsman, Magician], 2, 2);
-        this.generatePositionedArrayByTeam(0);
+        this.playerTeam = generateTeam([Bowman, Swordsman, Magician], secondLevel, 2);
+        this.generatePositionedArrayByTeam(playerTeamId);
         const countPlayerCharacters = this.gameState.playerTeamPositioned.length;
-        this.computerTeam = generateTeam([Daemon, Undead, Vampire], 3, countPlayerCharacters);
-        this.generatePositionedArrayByTeam(1);
+        this.computerTeam = generateTeam([Daemon, Undead, Vampire],
+          thirdLevel, countPlayerCharacters);
+        this.generatePositionedArrayByTeam(computerTeamId);
         break;
       }
-      case 4: {
+      case forthLevel: {
         this.gamePlay.drawUi(themes.mountain);
-        this.playerTeam = generateTeam([Bowman, Swordsman, Magician], 3, 2);
-        this.generatePositionedArrayByTeam(0);
+        this.playerTeam = generateTeam([Bowman, Swordsman, Magician], thirdLevel, 2);
+        this.generatePositionedArrayByTeam(playerTeamId);
         const countPlayerCharacters = this.gameState.playerTeamPositioned.length;
-        this.computerTeam = generateTeam([Daemon, Undead, Vampire], 4, countPlayerCharacters);
-        this.generatePositionedArrayByTeam(1);
+        this.computerTeam = generateTeam([Daemon, Undead, Vampire],
+          forthLevel, countPlayerCharacters);
+        this.generatePositionedArrayByTeam(computerTeamId);
         break;
       }
       default:
@@ -323,9 +315,10 @@ export default class GameController {
   }
 
   generatePositionedArrayByTeam(teamType) {
-    const set = new Set([
-      ...this.gameState.playerTeamPositioned.map((value) => value.position),
-      ...this.gameState.computerTeamPositioned.map((value) => value.position)]);
+    const set = new Set([].concat(
+      this.gameState.playerTeamPositioned.map((value) => value.position),
+      this.gameState.computerTeamPositioned.map((value) => value.position),
+    ));
 
     function getRandomUniquePosition(rangeX, rangeY) {
       let position;
@@ -338,17 +331,16 @@ export default class GameController {
         }
       }
       return position;
-      // return coordsToPosition(getRandomInteger(...rangeX), getRandomInteger(...rangeY));
     }
 
     switch (teamType) {
-      case 0: {
+      case playerTeamId: {
         const extendData = this.playerTeam.toArray()
           .map((value) => new PositionedCharacter(value, getRandomUniquePosition([0, 1], [0, 7])));
         this.gameState.playerTeamPositioned.push(...extendData);
         break;
       }
-      case 1: {
+      case computerTeamId: {
         const extendData = this.computerTeam.toArray()
           .map((value) => new PositionedCharacter(value, getRandomUniquePosition([6, 7], [0, 7])));
         this.gameState.computerTeamPositioned.push(...extendData);
@@ -372,19 +364,19 @@ export default class GameController {
 
   getBoardByLevel(level) {
     switch (level) {
-      case 1: {
+      case firstLevel: {
         this.gamePlay.drawUi(themes.prairie);
         break;
       }
-      case 2: {
+      case secondLevel: {
         this.gamePlay.drawUi(themes.desert);
         break;
       }
-      case 3: {
+      case thirdLevel: {
         this.gamePlay.drawUi(themes.arctic);
         break;
       }
-      case 4: {
+      case forthLevel: {
         this.gamePlay.drawUi(themes.mountain);
         break;
       }
@@ -407,14 +399,14 @@ export default class GameController {
       const data = this.stateService.load(isLoadUser);
       if (data) {
         this.gameState.from(data);
-        if (this.gameState.level === 4 && this.gameState.computerTeamPositioned.length === 0) {
+        if (this.gameState.level === forthLevel
+          && this.gameState.computerTeamPositioned.length === 0) {
           GamePlay.showMessage('Начните новую игру');
-          this.getBoardByLevel(1);
+          this.getBoardByLevel(firstLevel);
         } else {
           this.getBoardByLevel(this.gameState.level);
-          this.gamePlay.redrawPositions([
-            ...this.gameState.playerTeamPositioned, ...this.gameState.computerTeamPositioned]);
-          if (this.gameState.activePlayer === 1) {
+          this.gamePlay.redrawPositions(this.gameState.getTeamsPositioned());
+          if (this.gameState.activePlayer === computerId) {
             this.setBlockingBoard(true);
             this.computerAction();
           }
@@ -431,6 +423,6 @@ export default class GameController {
   viewStateInformation() {
     this.gamePlay.setLevelInfo(this.gameState.level);
     this.gamePlay.setUserPointsInfo(this.gameState.points);
-    this.gamePlay.setPlayerInfo(this.gameState.activePlayer === 0 ? 'Игрок' : 'Компьютер');
+    this.gamePlay.setPlayerInfo(this.gameState.activePlayer === playerId ? 'Игрок' : 'Компьютер');
   }
 }
